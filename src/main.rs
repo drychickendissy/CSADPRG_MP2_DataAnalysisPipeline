@@ -1,11 +1,9 @@
 mod model;
-mod view;
 mod controller;
+mod view;
 
-fn main()
+fn main() -> Result<(), Box<dyn std::error::Error>>
 {
-    if let Err(e) = controller::run_pipeline()
-    {
-        eprintln!("Error: {}", e);
-    }
+    view::menu::main_menu()?;
+    Ok(())
 }

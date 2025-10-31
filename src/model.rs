@@ -71,21 +71,33 @@ pub fn parse_int(s: &str) -> Option<i32>
     trimmed.parse::<i32>().ok()
 }
 
-/* Converts text of the format "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d" into NaiveDate */
+/* Converts text into NaiveDate with support for multiple formats */
 pub fn try_parse_date(s: &str) -> Option<NaiveDate>
 {
     let s_trim = s.trim();
-    if s_trim.is_empty() 
-    { 
-        return None; 
+    if s_trim.is_empty() {
+        return None;
     }
 
-    if let Ok(d) = NaiveDate::parse_from_str(s_trim, "%d/%m/%Y")
-    {
-        return Some(d);
+    // Supported date formats (in priority order)
+    let formats = [
+        "%d/%m/%Y",
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%d-%b-%y",
+        "%b %d, %Y",
+        "%B %d, %Y",
+    ];
+
+    for f in &formats {
+        if let Ok(date) = NaiveDate::parse_from_str(s_trim, f) {
+            return Some(date);
+        }
     }
+
     None
 }
+
 
 // ---------- Utility math ----------
 /* Gets median */
