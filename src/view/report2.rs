@@ -6,7 +6,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 struct Row
 {
     contractor: String,
@@ -30,8 +30,9 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
         by_contractor.entry(key).or_insert_with(Vec::new).push(p);
     }
 
-    let mut rows: Vec<Row> = Vec::new();
+    let mut raw_rows: Vec<Row> = Vec::new();
 
+    // Step 1: compute raw score before scaling
     for (contractor, group) in by_contractor
     {
         if group.len() < 5 { continue; }
@@ -40,28 +41,60 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
             .iter()
             .filter_map(|p| p.completion_delay_days)
             .map(|d| d as f64)
-            .sum::<f64>()
-            / (group.len() as f64);
+            .collect::<Vec<_>>();
+
+        let avg_delay = if avg_delay.is_empty() {
+            0.0
+        } else {
+            avg_delay.iter().sum::<f64>() / avg_delay.len() as f64
+        };
 
         let total_savings: f64 = group.iter().filter_map(|p| p.cost_savings).sum();
         let total_cost: f64 = group.iter().filter_map(|p| p.contract_cost).sum();
 
-        let mut reliability = (1.0 - (avg_delay / 90.0)) * (total_savings / total_cost) * 100.0;
-        if reliability > 100.0 { reliability = 100.0; }
-        if reliability < 0.0 { reliability = 0.0; }
+        //  (1 - (avg delay / 90)) * (total savings / totalcost) * 100 (capped at 100). 
+        let reliability_raw = (1.0 - (avg_delay / 90.0)) * (total_savings / total_cost) * 100.0;
 
-        let risk_flag = if reliability < 50.0 { "High Risk" } else { "OK" };
-
-        rows.push(Row
+        raw_rows.push(Row
         {
             contractor,
             num_projects: group.len(),
-            reliability_index: round2(reliability),
-            risk_flag: risk_flag.to_string(),
-            total_cost: round2(total_cost),
-            avg_delay: round2(avg_delay),
-            total_savings: round2(total_savings),
+            reliability_index: reliability_raw,
+            risk_flag: "".to_string(),
+            total_cost,
+            avg_delay,
+            total_savings,
         });
+    }
+
+    // Step 2: normalize 0–100
+    let (min_val, max_val) = raw_rows
+        .iter()
+        .fold((f64::MAX, f64::MIN), |(min, max), r| {
+            (min.min(r.reliability_index), max.max(r.reliability_index))
+        });
+
+    let mut rows: Vec<Row> = Vec::new();
+    for mut r in raw_rows
+    {
+        let norm = if (max_val - min_val).abs() < f64::EPSILON
+        {
+            50.0 // neutral if no variance
+        }
+        else
+        {
+            ((r.reliability_index - min_val) / (max_val - min_val)) * 100.0
+        };
+
+        let risk_flag = if norm < 50.0 { "High Risk" } else { "Low Risk" };
+
+        r.reliability_index = round2(norm);
+        r.risk_flag = risk_flag.to_string();
+        r.total_cost = round2(r.total_cost);
+        r.total_savings = round2(r.total_savings);
+        r.avg_delay = round2(r.avg_delay);
+
+        rows.push(r);
     }
 
     // sort & truncate
@@ -122,7 +155,6 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-// helper to keep super-long contractor names aligned
 fn truncate(s: &str, max_len: usize) -> String
 {
     if s.len() > max_len

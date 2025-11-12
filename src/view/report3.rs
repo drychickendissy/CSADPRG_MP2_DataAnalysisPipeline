@@ -61,14 +61,14 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>>
         "FundingYear", "TypeOfWork", "TotalProjects", "AvgSavings", "OverrunRate", "YoYChange"
     );
     println!(
-        "|{:-<12}|{:-<52}|{:-<15}|{:-<15}|{:-<15}|{:-<11}|",
+        "|{:-<13}|{:-<52}|{:-<15}|{:-<15}|{:-<15}|{:-<11}|",
         "", "", "", "", "", ""
     );
 
     for r in &rows
     {
         println!(
-            "| {:<10} | {:<50} | {:>13} | {:>13.2} | {:>13.2} | {:>9.2} |",
+            "| {:<11} | {:<50} | {:>13} | {:>13.2} | {:>13.2} | {:>9.2} |",
             r.year,
             truncate(&r.type_of_work, 50),
             r.total_projects,

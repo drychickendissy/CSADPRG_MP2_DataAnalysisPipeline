@@ -1,12 +1,13 @@
 use crate::model::{Project, median, round2};
 use csv::WriterBuilder;
 use serde::Serialize;
-use std::error::Error;
 use std::collections::HashMap;
+use std::error::Error;
 use num_format::{Locale, ToFormattedString};
 
 #[derive(Serialize)]
-struct Report1Row {
+struct Report1Row
+{
     region: String,
     main_island: String,
     total_budget: f64,
@@ -16,18 +17,21 @@ struct Report1Row {
     efficiency_score: f64,
 }
 
-pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Error>> {
+pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Error>>
+{
     println!("\nRegional Flood Mitigation Efficiency Summary");
     println!("(Filtered: 2021–2023 Projects)\n");
 
     // Filter projects by FundingYear
-    let filtered: Vec<&Project> = projects.iter()
+    let filtered: Vec<&Project> = projects
+        .iter()
         .filter(|p| matches!(p.funding_year, Some(2021..=2023)))
         .collect();
 
     // Group by Region + MainIsland
     let mut by_group: HashMap<String, Vec<&Project>> = HashMap::new();
-    for p in filtered {
+    for p in filtered
+    {
         let region = p.region.clone().unwrap_or_else(|| "Unknown".to_string());
         let island = p.main_island.clone().unwrap_or_else(|| "Unknown".to_string());
         let key = format!("{}|{}", region, island);
@@ -36,49 +40,128 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
 
     let mut rows: Vec<Report1Row> = Vec::new();
 
-    for (key, group) in by_group {
+    for (key, group) in by_group
+    {
         let parts: Vec<&str> = key.split('|').collect();
         let region = parts[0].to_string();
         let main_island = parts[1].to_string();
 
-        let total_budget: f64 = group.iter()
+        let total_budget: f64 = group
+            .iter()
             .filter_map(|p| p.approved_budget_for_contract)
             .sum();
 
-        let mut savings: Vec<f64> = group.iter()
+        let mut savings: Vec<f64> = group
+            .iter()
             .filter_map(|p| p.cost_savings)
             .collect();
         let median_savings = median(&mut savings);
 
-        let delays: Vec<f64> = group.iter()
+        let delays: Vec<f64> = group
+            .iter()
             .filter_map(|p| p.completion_delay_days.map(|d| d as f64))
             .collect();
-        let avg_delay = if delays.is_empty() { 0.0 } else { delays.iter().sum::<f64>() / delays.len() as f64 };
-        let high_delay_count = delays.iter().filter(|&&d| d > 30.0).count();
-        let high_delay_pct = if delays.is_empty() { 0.0 } else { (high_delay_count as f64 / delays.len() as f64) * 100.0 };
-        let efficiency_score = if avg_delay != 0.0 { (median_savings / avg_delay) * 100.0 } else { 0.0 };
 
-        rows.push(Report1Row {
+        let avg_delay = if delays.is_empty()
+        {
+            0.0
+        }
+        else
+        {
+            delays.iter().sum::<f64>() / delays.len() as f64
+        };
+
+        let high_delay_count = delays.iter().filter(|&&d| d > 30.0).count();
+        let high_delay_pct = if delays.is_empty()
+        {
+            0.0
+        }
+        else
+        {
+            (high_delay_count as f64 / delays.len() as f64) * 100.0
+        };
+
+        // --- EfficiencyRaw
+        let efficiency_raw = if avg_delay > 0.0
+        {
+            (median_savings / avg_delay) * 100.0
+        }
+        else
+        {
+            0.0
+        };
+
+        rows.push(Report1Row
+        {
             region,
             main_island,
             total_budget: round2(total_budget),
             median_savings: round2(median_savings),
             avg_delay: round2(avg_delay),
             high_delay_pct: round2(high_delay_pct),
-            efficiency_score: round2(efficiency_score),
+            efficiency_score: efficiency_raw, // will normalize later
         });
     }
 
-    // Sort by efficiency score (descending)
-    rows.sort_by(|a, b| b.efficiency_score.partial_cmp(&a.efficiency_score).unwrap_or(std::cmp::Ordering::Equal));
+    // --- Normalize efficiency scores to 0–100 like R’s minmax_0_100()
+    let valid_scores: Vec<f64> = rows
+        .iter()
+        .filter(|r| r.efficiency_score > 0.0)
+        .map(|r| r.efficiency_score)
+        .collect();
 
-    // Print table
-    println!("| {:<35} | {:<10} | {:>13} | {:>14} | {:>9} | {:>13} | {:>17} |",
-        "Region", "MainIsland", "TotalBudget", "MedianSavings", "AvgDelay", "HighDelayPct", "EfficiencyScore");
-    println!("|{:-<37}|{:-<12}|{:-<15}|{:-<16}|{:-<11}|{:-<15}|{:-<19}|",
-        "", "", "", "", "", "", "");
+    let (min_score, max_score) = if valid_scores.is_empty()
+    {
+        (0.0, 1.0)
+    }
+    else
+    {
+        (
+            valid_scores
+                .iter()
+                .cloned()
+                .fold(f64::INFINITY, f64::min),
+            valid_scores
+                .iter()
+                .cloned()
+                .fold(f64::NEG_INFINITY, f64::max),
+        )
+    };
 
-    for r in &rows {
+    for r in &mut rows
+    {
+        if r.efficiency_score > 0.0 && (max_score - min_score) > f64::EPSILON
+        {
+            r.efficiency_score =
+                ((r.efficiency_score - min_score) / (max_score - min_score)) * 100.0;
+        }
+        else
+        {
+            r.efficiency_score = 0.0;
+        }
+
+        r.efficiency_score = round2(r.efficiency_score);
+    }
+
+    // Sort descending by efficiency
+    rows.sort_by(|a, b| {
+        b.efficiency_score
+            .partial_cmp(&a.efficiency_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    // --- Print table ---
+    println!(
+        "| {:<35} | {:<10} | {:>14} | {:>14} | {:>9} | {:>13} | {:>17} |",
+        "Region", "MainIsland", "TotalBudget", "MedianSavings", "AvgDelay", "HighDelayPct", "EfficiencyScore"
+    );
+    println!(
+        "|{:-<37}|{:-<12}|{:-<16}|{:-<16}|{:-<11}|{:-<15}|{:-<19}|",
+        "", "", "", "", "", "", ""
+    );
+
+    for r in &rows
+    {
         let formatted_budget = (r.total_budget.round() as u64).to_formatted_string(&Locale::en);
         println!(
             "| {:<35} | {:<10} | {:>13} | {:>14.2} | {:>9.1} | {:>13.2} | {:>17.2} |",
@@ -94,7 +177,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
 
     println!("(Full table exported to report1_regional_efficiency.csv)\n");
 
-    // Save CSV
+    // --- Save CSV ---
     let mut wtr = WriterBuilder::new().from_path("report1_regional_efficiency.csv")?;
     wtr.write_record(&[
         "Region",
@@ -106,7 +189,8 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
         "EfficiencyScore",
     ])?;
 
-    for r in rows {
+    for r in rows
+    {
         wtr.write_record(&[
             &r.region,
             &r.main_island,
