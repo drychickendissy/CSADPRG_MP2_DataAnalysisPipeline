@@ -33,9 +33,9 @@ This major course output presents the development of a Data Analysis Pipeline th
 | REQ-0011 | Provision for output standardization: Generate identical CSV files for each report (comma-formatted numbers, rounded to 2 decimals); one run command per language (e.g., Rscript main.R, node index.js). |
 
 ## CHECKLIST
-- [ ] REQ-0001
-- [ ] REQ-0002
-- [ ] REQ-0003
+- [x] REQ-0001
+- [x] REQ-0002
+- [x] REQ-0003
 - [ ] REQ-0004
 - [ ] REQ-0005
 - [x] REQ-0006
