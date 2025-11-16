@@ -43,4 +43,4 @@ This major course output presents the development of a Data Analysis Pipeline th
 - [ ] REQ-0008
 - [ ] REQ-0009
 - [ ] REQ-0010
-- [ ] REQ-0011
+- [x] REQ-0011
