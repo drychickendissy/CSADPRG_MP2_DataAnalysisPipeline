@@ -1,14 +1,11 @@
-use crate::model::round2;
-use crate::model::Project;
+use crate::model::{Project, round2};
 use csv::WriterBuilder;
 use serde::Serialize;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::error::Error;
 
 #[derive(Serialize)]
-struct Row
-{
+struct Row {
     year: i32,
     type_of_work: String,
     total_projects: usize,
@@ -17,60 +14,92 @@ struct Row
     yoy_change: f64,
 }
 
-pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>>
-{
+pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> {
     println!("\nReport 3: Annual Project Type Cost Overrun Trends\n");
-    println!("Annual Project Type Cost Overrun Trends (Grouped by FundingYear and TypeOfWork)\n");
 
-    let mut by_year_type: HashMap<(i32, String), Vec<&Project>> = HashMap::new();
-    for p in projects.iter()
-    {
-        if let (Some(y), Some(t)) = (p.funding_year, p.type_of_work.clone())
-        {
-            by_year_type.entry((y, t)).or_insert_with(Vec::new).push(p);
+    // ----------- Group by (FundingYear → TypeOfWork → Vec<Project>) -----------
+    let mut map: HashMap<i32, HashMap<String, Vec<&Project>>> = HashMap::new();
+
+    for p in projects.iter() {
+        if let (Some(year), Some(work)) = (p.funding_year, p.type_of_work.clone()) {
+            map.entry(year)
+                .or_default()
+                .entry(work)
+                .or_default()
+                .push(p);
         }
     }
 
+    // ----------- Compute Rows (without YoY first) -----------
     let mut rows: Vec<Row> = Vec::new();
-    for ((year, type_of_work), group) in by_year_type
-    {
-        let total_projects = group.len();
-        let avg_savings: f64 = group.iter().filter_map(|p| p.cost_savings).sum::<f64>() / (group.len() as f64);
-        let overrun_rate = avg_savings / 100.0;
-        // Placeholder YoYChange (can later compute from previous year)
-        let yoy_change = -20.0;
+    let mut avg_savings_map: HashMap<(i32, String), f64> = HashMap::new();
 
-        rows.push(Row
-        {
-            year,
-            type_of_work,
-            total_projects,
-            avg_savings: round2(avg_savings),
-            overrun_rate: round2(overrun_rate),
-            yoy_change: round2(yoy_change),
-        });
+    for (year, type_map) in &map {
+        for (work, group) in type_map {
+            let avg_savings = group
+                .iter()
+                .filter_map(|p| p.cost_savings)
+                .sum::<f64>()
+                / (group.len() as f64);
+
+            let overrun_rate = avg_savings / 100.0;
+
+            avg_savings_map.insert((*year, work.clone()), avg_savings);
+
+            rows.push(Row {
+                year: *year,
+                type_of_work: work.clone(),
+                total_projects: group.len(),
+                avg_savings: round2(avg_savings),
+                overrun_rate: round2(overrun_rate),
+                yoy_change: 0.0, // fill later
+            });
+        }
     }
 
-    rows.sort_by(|a, b| {
-        a.year.cmp(&b.year).then_with(|| a.type_of_work.cmp(&b.type_of_work))
-    });
+    // ----------- Compute YoY (% change from previous year) -----------
+    for row in rows.iter_mut() {
+        let curr = row.avg_savings;
 
-    // ---------- PRINT TABLE ----------
+        if let Some(prev) = avg_savings_map.get(&(row.year - 1, row.type_of_work.clone())) {
+            if *prev != 0.0 {
+                row.yoy_change = round2(((curr - prev) / prev) * 100.0);
+            } else {
+                row.yoy_change = 0.0;
+            }
+        } else {
+            row.yoy_change = 0.0; // baseline year (e.g., 2021)
+        }
+    }
+
+    // Sort results by year then type_of_work
+    rows.sort_by(|a, b| a.year.cmp(&b.year).then(a.type_of_work.cmp(&b.type_of_work)));
+
+    // ----------- PRINT TABLE -----------
+    println!("Annual Project Type Cost Overrun Trends (Grouped by FundingYear and TypeOfWork)\n");
+
+    // Header
     println!(
-        "| {:<10} | {:<50} | {:>13} | {:>13} | {:>13} | {:>9} |",
-        "FundingYear", "TypeOfWork", "TotalProjects", "AvgSavings", "OverrunRate", "YoYChange"
+        "| {:<6} | {:<45} | {:>14} | {:>14} | {:>14} | {:>14} |",
+        "Year", "TypeOfWork", "TotalProjects", "AvgSavings", "OverrunRate", "YoYChange"
     );
     println!(
-        "|{:-<13}|{:-<52}|{:-<15}|{:-<15}|{:-<15}|{:-<11}|",
+        "|{:-<8}|{:-<47}|{:-<16}|{:-<16}|{:-<16}|{:-<16}|",
         "", "", "", "", "", ""
     );
 
-    for r in &rows
-    {
+    // Rows
+    for r in &rows {
+        let type_of_work = if r.type_of_work.len() > 45 {
+            format!("{}…", &r.type_of_work[..44])
+        } else {
+            r.type_of_work.clone()
+        };
+
         println!(
-            "| {:<11} | {:<50} | {:>13} | {:>13.2} | {:>13.2} | {:>9.2} |",
+            "| {:<6} | {:<45} | {:>14} | {:>14.2} | {:>14.2} | {:>14.2} |",
             r.year,
-            truncate(&r.type_of_work, 50),
+            type_of_work,
             r.total_projects,
             r.avg_savings,
             r.overrun_rate,
@@ -78,10 +107,13 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>>
         );
     }
 
+
+
     println!("\n(Full table exported to report3_annual_trends.csv)\n");
 
-    // ---------- WRITE CSV ----------
+    // ----------- WRITE CSV -----------
     let mut wtr = WriterBuilder::new().from_path("report3_annual_trends.csv")?;
+
     wtr.write_record(&[
         "FundingYear",
         "TypeOfWork",
@@ -90,8 +122,8 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>>
         "OverrunRate",
         "YoYChange",
     ])?;
-    for r in rows
-    {
+
+    for r in rows {
         wtr.write_record(&[
             &r.year.to_string(),
             &r.type_of_work,
@@ -101,19 +133,7 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>>
             &format!("{:.2}", r.yoy_change),
         ])?;
     }
+
     wtr.flush()?;
     Ok(())
-}
-
-// helper: safely truncate long text
-fn truncate(s: &str, max_len: usize) -> String
-{
-    if s.len() > max_len
-    {
-        format!("{}…", &s[..max_len - 1])
-    }
-    else
-    {
-        s.to_string()
-    }
 }
