@@ -19,6 +19,8 @@ pub struct Project
     pub lon: Option<f64>,
     pub cost_savings: Option<f64>,
     pub completion_delay_days: Option<i64>,
+    pub contract_id: Option<String>, 
+    pub cluster_target_id: Option<String>,
 }
 
 impl Project
@@ -43,6 +45,8 @@ impl Project
             lon: None,
             cost_savings: None,
             completion_delay_days: None,
+            contract_id: None,  
+            cluster_target_id: None,
         }
     }
 }

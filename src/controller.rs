@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::error::Error;  // allows Result<(), Box<dyn Error>> (error handling)
 use std::io::Write;
 use std::sync::OnceLock; // allows storing of projects globally once
+use regex::Regex;
 
 // ----- NOTE: GLOBAL VARIABLES -----
 const MIN_YEAR: i32 = 2021;
@@ -13,6 +14,13 @@ const MAX_YEAR: i32 = 2023;
 
 static PROJECTS: OnceLock<Vec<Project>> = OnceLock::new();
 // ----- NOTE: GLOBAL VARIABLES -----
+
+// scanner for clustered
+fn scan_clustered(text: &str) -> Option<String> {
+    let re = Regex::new(r"Clustered with Contract ID (\d+)").unwrap();
+    re.captures(text)
+        .and_then(|caps| caps.get(1).map(|m| m.as_str().to_string()))
+}
 
 // ----- Load File -----
 pub fn load_file() -> Result<(), Box<dyn Error>> {
@@ -47,6 +55,7 @@ pub fn load_file() -> Result<(), Box<dyn Error>> {
         // Assignment of values
         p.project_id = Some(get("ProjectId"));  // p.project_id is assigned a value under the column "ProjectId" from the current row
                                                 // Some() wraps the String in an Option (valu may be empty or may not) 
+        p.contract_id = Some(get("ContractId"));
         p.funding_year = parse_int(&get("FundingYear"));    // &get borrows the String to avoid moving it (used for parse functions to not give them ownership and only provide reference)
         p.region = Some(get("Region"));
         p.main_island = Some(get("MainIsland"));
@@ -54,7 +63,19 @@ pub fn load_file() -> Result<(), Box<dyn Error>> {
         p.contractor = Some(get("Contractor"));
         p.type_of_work = Some(get("TypeOfWork"));
 
-        p.approved_budget_for_contract = parse_float(&get("ApprovedBudgetForContract"));
+        // logic for approved_budget_for_contract with clustered detection start
+        let raw_budget = get("ApprovedBudgetForContract");
+
+        // Try normal number parsing first
+        let mut approved_budget = parse_float(&raw_budget);
+
+        // Detect clustered rows
+        if let Some(target_id) = scan_clustered(&raw_budget) {
+            p.cluster_target_id = Some(target_id);
+        }
+        // logic for approved_budget_for_contract with clustered detection end
+
+p.approved_budget_for_contract = approved_budget;
         p.contract_cost = parse_float(&get("ContractCost"));
 
         p.start_date = try_parse_date(&get("StartDate"));
@@ -81,6 +102,27 @@ pub fn load_file() -> Result<(), Box<dyn Error>> {
         }
 
         projects.push(p); // adds project to projects vector
+    }
+
+    // -----------------------------------------------------------
+    // FIX CLUSTERED BUDGETS AFTER LOADING ALL ROWS
+    // -----------------------------------------------------------
+    let mut budget_lookup: HashMap<String, f64> = HashMap::new();
+
+    // 1. Build lookup table: ContractID → Budget
+    for proj in &projects {
+        if let (Some(id), Some(budget)) = (&proj.contract_id, proj.approved_budget_for_contract) {
+            budget_lookup.insert(id.clone(), budget);
+        }
+    }
+
+    // 2. Apply corrected budgets to clustered rows
+    for proj in &mut projects {
+        if let Some(ref target) = proj.cluster_target_id {
+            if let Some(budget) = budget_lookup.get(target) {
+                proj.approved_budget_for_contract = Some(*budget);
+            }
+        }
     }
 
     let total = projects.len();

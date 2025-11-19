@@ -17,7 +17,7 @@ struct Row {
 pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> {
     println!("\nReport 3: Annual Project Type Cost Overrun Trends\n");
 
-    // ----------- Group by (FundingYear → TypeOfWork → Vec<Project>) -----------
+    // ----------- Group by (FundingYear, TypeOfWork,  Vec<Project>) -----------
     let mut map: HashMap<i32, HashMap<String, Vec<&Project>>> = HashMap::new();
 
     for p in projects.iter() {
@@ -30,7 +30,7 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
         }
     }
 
-    // ----------- Compute Rows (without YoY first) -----------
+    // ----------- Compute Rows (without YoY) -----------
     let mut rows: Vec<Row> = Vec::new();
     let mut avg_savings_map: HashMap<(i32, String), f64> = HashMap::new();
 
@@ -68,14 +68,14 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
                 row.yoy_change = 0.0;
             }
         } else {
-            row.yoy_change = 0.0; // baseline year (e.g., 2021)
+            row.yoy_change = 0.0; // baseline year (2021)
         }
     }
 
     // Sort results by year then type_of_work
     rows.sort_by(|a, b| a.year.cmp(&b.year).then(a.type_of_work.cmp(&b.type_of_work)));
 
-    // ----------- PRINT TABLE -----------
+    // ----------- Print Table -----------
     println!("Annual Project Type Cost Overrun Trends (Grouped by FundingYear and TypeOfWork)\n");
 
     // Header
@@ -107,11 +107,8 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
         );
     }
 
-
-
     println!("\n(Full table exported to report3_annual_trends.csv)\n");
 
-    // ----------- WRITE CSV -----------
     let mut wtr = WriterBuilder::new().from_path("report3_annual_trends.csv")?;
 
     wtr.write_record(&[
