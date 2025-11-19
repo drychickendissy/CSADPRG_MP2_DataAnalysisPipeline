@@ -1,3 +1,9 @@
+/********************
+Last names: Abdulrahman, Bilanes, Cruz, Nicolas
+Language: JavaScript
+Paradigm(s): Procedural, Object-Oriented, Functional, Data-Driven, Immutable
+********************/
+
 use chrono::NaiveDate; // imports NaiveDate (represents calendar date with no timezone)
 
 #[derive(Debug, Clone)]
@@ -19,6 +25,7 @@ pub struct Project
     pub lon: Option<f64>,
     pub cost_savings: Option<f64>,
     pub completion_delay_days: Option<i64>,
+    pub contract_id: Option<String>, 
 }
 
 impl Project
@@ -43,6 +50,7 @@ impl Project
             lon: None,
             cost_savings: None,
             completion_delay_days: None,
+            contract_id: None,  
         }
     }
 }
@@ -130,4 +138,17 @@ pub fn round2(v: f64) -> f64
     // .round() to round to nearest integer
     // / 100 to shift decimal point back to original position
     (v * 100.0).round() / 100.0
+}
+
+// helper to keep long contractor names aligned
+pub fn truncate(s: &str, max_len: usize) -> String
+{
+    if s.len() > max_len
+    {
+        format!("{}…", &s[..max_len - 1])   // formats truncated string with ellipsis
+    }
+    else
+    {
+        s.to_string()
+    }
 }

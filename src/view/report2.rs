@@ -1,9 +1,16 @@
-use crate::model::{Project, median, round2};   // imports Project struct and utility functions from model
+/********************
+Last names: Abdulrahman, Bilanes, Cruz, Nicolas
+Language: JavaScript
+Paradigm(s): Procedural, Object-Oriented, Functional, Data-Driven, Immutable
+********************/
+
+use crate::model::{Project, truncate, round2};   // imports Project struct and utility functions from model
 use csv::WriterBuilder; // enables CSV writing
 use serde::Serialize;   // enables serialization for CSVs
 use std::cmp::Ordering; // enables Ordering for sorting
 use std::collections::HashMap;  // enables HashMap usage
 use std::error::Error;  // allows Result<(), Box<dyn Error>> (error handling)
+use num_format::{ToFormattedString};    // for formatting numbers with commas
 
 #[derive(Serialize)]
 struct Row
@@ -81,30 +88,41 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
 
     // ---------- Print Table ----------
     println!(
-        "| {:<4} | {:<55} | {:>14} | {:>12} | {:>8} | {:>14} | {:>16} | {:<9} |",
+        "| {:<4} | {:<45} | {:>16} | {:>12} | {:>8} | {:>14} | {:>16} | {:<9} |",
         "Rank", "Contractor", "TotalCost", "NumProjects", "AvgDelay", "TotalSavings", "ReliabilityIndex", "RiskFlag"
     );
     println!(
-        "|{:-<6}|{:-<57}|{:-<16}|{:-<14}|{:-<10}|{:-<16}|{:-<18}|{:-<11}|",
+        "|{:-<6}|{:-<47}|{:-<18}|{:-<14}|{:-<10}|{:-<16}|{:-<18}|{:-<11}|",
         "", "", "", "", "", "", "", ""
     );
 
     for (i, r) in rows.iter().enumerate()
     {
+        let formatted_total_cost = format!(
+            "{}.{:02}",
+            (r.total_cost as u64).to_formatted_string(&num_format::Locale::en),
+            (r.total_cost.fract() * 100.0).round() as u64
+        );
+
+        let formatted_total_savings = format!(
+            "{}.{:02}",
+            (r.total_savings as u64).to_formatted_string(&num_format::Locale::en),
+            (r.total_savings.fract() * 100.0).round() as u64
+        );
         println!(
-            "| {:<4} | {:<55} | {:>14.0} | {:>12} | {:>8.1} | {:>14.0} | {:>16.2} | {:<9} |",
+            "| {:<4} | {:<45} | {:>14} | {:>12} | {:>8.1} | {:>14} | {:>16.2} | {:<9} |",
             i + 1,
-            truncate(&r.contractor, 55),
-            r.total_cost,
+            truncate(&r.contractor, 45),
+            formatted_total_cost,
             r.num_projects, 
             r.avg_delay,
-            r.total_savings,
+            formatted_total_savings,
             r.reliability_index,
             r.risk_flag
         );
     }
 
-    // ---------- Print Table ----------
+    // ----- Save CSV -----
     let mut wtr = WriterBuilder::new().from_path("report2_top_contractors.csv")?;
     wtr.write_record(&[
         "Contractor",
@@ -115,6 +133,9 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
         "ReliabilityIndex",
         "RiskFlag",
     ])?;
+    
+    println!("(Full table exported to report1_regional_efficiency.csv)\n");
+
     for r in rows
     {
         wtr.write_record(&[
@@ -129,17 +150,4 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
     }
     wtr.flush()?;
     Ok(())
-}
-
-// helper to keep long contractor names aligned
-fn truncate(s: &str, max_len: usize) -> String
-{
-    if s.len() > max_len
-    {
-        format!("{}…", &s[..max_len - 1])
-    }
-    else
-    {
-        s.to_string()
-    }
 }
