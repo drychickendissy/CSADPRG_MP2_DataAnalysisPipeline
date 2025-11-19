@@ -1,8 +1,15 @@
-use crate::model::{Project, round2};
+/********************
+Last names: Abdulrahman, Bilanes, Cruz, Nicolas
+Language: JavaScript
+Paradigm(s): Procedural, Object-Oriented, Functional, Data-Driven, Immutable
+********************/
+
+use crate::model::{Project, truncate, round2};
 use csv::WriterBuilder;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::error::Error;
+use num_format::{ToFormattedString};    // for formatting numbers with commas
 
 #[derive(Serialize)]
 struct Row {
@@ -17,7 +24,7 @@ struct Row {
 pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> {
     println!("\nReport 3: Annual Project Type Cost Overrun Trends\n");
 
-    // ----------- Group by (FundingYear, TypeOfWork,  Vec<Project>) -----------
+    // ----------- Group by (FundingYear, TypeOfWork, Vec<Project>) -----------
     let mut map: HashMap<i32, HashMap<String, Vec<&Project>>> = HashMap::new();
 
     for p in projects.iter() {
@@ -36,14 +43,21 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
 
     for (year, type_map) in &map {
         for (work, group) in type_map {
+            // Average savings for the group
             let avg_savings = group
                 .iter()
                 .filter_map(|p| p.cost_savings)
                 .sum::<f64>()
                 / (group.len() as f64);
 
-            let overrun_rate = avg_savings / 100.0;
+            // Overrun rate = (# of projects where CostSavings < 0) / total projects * 100
+            let overruns = group
+                .iter()
+                .filter(|p| p.cost_savings.unwrap_or(0.0) < 0.0)
+                .count();
+            let overrun_rate = (overruns as f64 / group.len() as f64) * 100.0;
 
+            // Store avg_savings for YoY calculation later
             avg_savings_map.insert((*year, work.clone()), avg_savings);
 
             rows.push(Row {
@@ -58,6 +72,7 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
     }
 
     // ----------- Compute YoY (% change from previous year) -----------
+    // YoY = ((current year avg - previous year avg) / previous year avg) * 100 if previous year avg != 0
     for row in rows.iter_mut() {
         let curr = row.avg_savings;
 
@@ -72,8 +87,12 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
         }
     }
 
-    // Sort results by year then type_of_work
-    rows.sort_by(|a, b| a.year.cmp(&b.year).then(a.type_of_work.cmp(&b.type_of_work)));
+    // Sort results by year ascending then avg_savings descending
+    rows.sort_by(|a, b| {
+        a.year
+            .cmp(&b.year)
+            .then(b.avg_savings.partial_cmp(&a.avg_savings).unwrap_or(std::cmp::Ordering::Equal))
+    });
 
     // ----------- Print Table -----------
     println!("Annual Project Type Cost Overrun Trends (Grouped by FundingYear and TypeOfWork)\n");
@@ -90,18 +109,20 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
 
     // Rows
     for r in &rows {
-        let type_of_work = if r.type_of_work.len() > 45 {
-            format!("{}…", &r.type_of_work[..44])
-        } else {
-            r.type_of_work.clone()
-        };
+        let type_of_work = truncate(&r.type_of_work, 45);
+
+        let formatted_avg_savings = format!(
+            "{}.{:02}",
+            (r.avg_savings as u64).to_formatted_string(&num_format::Locale::en),
+            (r.avg_savings.fract() * 100.0).round() as u64
+        );
 
         println!(
-            "| {:<6} | {:<45} | {:>14} | {:>14.2} | {:>14.2} | {:>14.2} |",
+            "| {:<6} | {:<45} | {:>14} | {:>14} | {:>14.2} | {:>14.2} |",
             r.year,
             type_of_work,
             r.total_projects,
-            r.avg_savings,
+            formatted_avg_savings,
             r.overrun_rate,
             r.yoy_change
         );
@@ -109,6 +130,7 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
 
     println!("\n(Full table exported to report3_annual_trends.csv)\n");
 
+    // ----- Save CSV -----
     let mut wtr = WriterBuilder::new().from_path("report3_annual_trends.csv")?;
 
     wtr.write_record(&[
@@ -119,7 +141,7 @@ pub fn report_annual_trends(projects: &[Project]) -> Result<(), Box<dyn Error>> 
         "OverrunRate",
         "YoYChange",
     ])?;
-
+    
     for r in rows {
         wtr.write_record(&[
             &r.year.to_string(),

@@ -1,32 +1,37 @@
+/********************
+Last names: Abdulrahman, Bilanes, Cruz, Nicolas
+Language: JavaScript
+Paradigm(s): Procedural, Object-Oriented, Functional, Data-Driven, Immutable
+********************/
+
 use std::io::{self, Write};
 use crate::controller; // imports controller
 
-pub fn main_menu() -> Result<(), Box<dyn std::error::Error>> // returns ok(()) on success and store error in Box on failure (stores error on heap so size does not matter)
-{
-    loop
-    {
+pub fn main_menu() -> Result<(), Box<dyn std::error::Error>> {
+    let mut loaded_projects: Option<Vec<crate::model::Project>> = None;
+    loop {
         println!("\nSelect Language Implementation:");
         println!("[1] Load the file");
         println!("[2] Generate Reports");
         print!("\nEnter choice: ");
-        io::stdout().flush()?; // makes sure prompt prints immediately
+        io::stdout().flush()?;  // ensure prompt prints immediately
 
         let mut choice = String::new();
-        io::stdin().read_line(&mut choice)?; // reads user input and store in choice
-        let choice = choice.trim(); // removes whitespace
+        io::stdin().read_line(&mut choice)?;
+        let choice = choice.trim();
 
-        match choice
-        {
-            "1" =>
-            {
-                controller::load_file()?; // calls controller to load file
+        match choice {
+            "1" => {
+                loaded_projects = Some(controller::load_file()?);
             }
-            "2" =>
-            {
-                controller::generate_reports()?; // calls controller to generate reports
+            "2" => {
+                if let Some(ref projects) = loaded_projects {
+                    controller::generate_reports(projects)?;    // generate reports from controller
+                } else {
+                    println!("\nNo data loaded yet. Please choose [1] first.");
+                }
             }
-            _ => // user input is neither 1 or 2
-            {
+            _ => {
                 println!("\nInvalid choice. Please enter 1 or 2.");
             }
         }

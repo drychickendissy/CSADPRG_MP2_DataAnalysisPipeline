@@ -1,3 +1,9 @@
+/********************
+Last names: Abdulrahman, Bilanes, Cruz, Nicolas
+Language: JavaScript
+Paradigm(s): Procedural, Object-Oriented, Functional, Data-Driven, Immutable
+********************/
+
 use crate::model::{Project, median, round2};    // imports Project struct and utility functions from model
 use csv::WriterBuilder; // enables CSV writing
 use serde::Serialize;   // enables serialization for CSV
@@ -154,17 +160,21 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
     // :> is right align
     // :< is left align
     println!(
-        "| {:<35} | {:<10} | {:>14} | {:>14} | {:>9} | {:>13} | {:>17} |",
+        "| {:<35} | {:<10} | {:>17} | {:>14} | {:>9} | {:>13} | {:>17} |",
         "Region", "MainIsland", "TotalBudget", "MedianSavings", "AvgDelay", "HighDelayPct", "EfficiencyScore"
     );
     println!(
-        "|{:-<37}|{:-<12}|{:-<16}|{:-<16}|{:-<11}|{:-<15}|{:-<19}|",
+        "|{:-<37}|{:-<12}|{:-<19}|{:-<16}|{:-<11}|{:-<15}|{:-<19}|",
         "", "", "", "", "", "", ""
     );
 
     for r in &rows
     {
-        let formatted_budget = (r.total_budget.round() as u64).to_formatted_string(&Locale::en);
+        let formatted_budget = format!(
+            "{}.{:02}",
+            (r.total_budget as u64).to_formatted_string(&Locale::en),
+            (r.total_budget.fract() * 100.0).round() as u64
+        );
         let formatted_median_savings = format!(
             "{}.{:02}",
             (r.median_savings as u64).to_formatted_string(&Locale::en),
@@ -172,7 +182,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
         );
 
         println!(
-            "| {:<35} | {:<10} | {:>14} | {:>14} | {:>9.1} | {:>13.2} | {:>17.2} |",
+            "| {:<35} | {:<10} | {:>17} | {:>14} | {:>9.1} | {:>13.2} | {:>17.2} |",    // :>17 and not :>14 to match alignment
             r.region,
             r.main_island,
             formatted_budget,
@@ -185,7 +195,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
 
     println!("(Full table exported to report1_regional_efficiency.csv)\n");
 
-    // --- Save CSV ---
+    // ----- Save CSV -----
     let mut wtr = WriterBuilder::new().from_path("report1_regional_efficiency.csv")?;
     wtr.write_record(&[
         "Region",
