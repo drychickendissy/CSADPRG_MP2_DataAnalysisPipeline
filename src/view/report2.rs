@@ -134,7 +134,7 @@ pub fn report_top_contractors(projects: &[Project]) -> Result<(), Box<dyn Error>
         "RiskFlag",
     ])?;
     
-    println!("(Full table exported to report1_regional_efficiency.csv)\n");
+    println!("(Full table exported to report2_top_contractors.csv)\n");
 
     for r in rows
     {

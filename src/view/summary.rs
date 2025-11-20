@@ -104,5 +104,13 @@ pub fn summary_json(projects: &[Project]) -> Result<(), Box<dyn Error>> {
     file.write_all(json_text.as_bytes())?;  // write JSON string to file
 
     println!("summary.json created.\n");
+    println!("\n==================== Summary Report ====================");
+    println!("Total Projects        : {}", summary.total_projects);
+    println!("Unique Contractors    : {}", summary.total_contractors);
+    println!("Unique Provinces      : {}", summary.total_provinces);
+    println!("Avg Delay (days)      : {:.2}", summary.global_avg_delay_days);
+    println!("Total Savings (₱)     : {:.2}", summary.global_total_savings);
+    println!("========================================================\n");
+
     Ok(())
 }
