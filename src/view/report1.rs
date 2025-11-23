@@ -32,16 +32,16 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
     // Filter projects by StartDate year (2021–2023) 
     // NOTE: REMOVE THIS IF ALREADY FILTERED IN CONTROLLER
     let filtered: Vec<&Project> = projects
-    .iter()
-    .filter(|p| {
-        if let Some(date) = p.start_date {
-            let year = date.year();
-            year >= 2021 && year <= 2023
-        } else {
-            false
-        }
-    })
-    .collect();
+        .iter()
+        .filter(|p| {
+            if let Some(date) = p.start_date {
+                let year = date.year();
+                year >= 2021 && year <= 2023
+            } else {
+                false
+            }
+        })
+        .collect();
 
 
     // Group by Region + MainIsland
@@ -53,7 +53,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
         let key = format!("{}|{}", project_region, project_island); // combines region and island as a key
         by_group.entry(key).or_insert_with(Vec::new).push(p);   // adds project to group (region + island)
     }
-    
+
     let mut rows: Vec<Report1Row> = Vec::new(); // stores rows for report. Each row will hold metrics for one region + main island group
 
     for (key, group) in by_group
@@ -66,7 +66,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
             .iter() // iterates through projects in group
             .filter_map(|p| p.approved_budget_for_contract) // extracts approved_budget_for_contract if Some, skips if None
             .sum(); // sums up all budgets
-                    // same (more or less) logic for savings and delays
+        // same (more or less) logic for savings and delays
 
         let mut savings: Vec<f64> = group
             .iter()
@@ -102,7 +102,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
             0.0
         };  // (if average delay > 0) (median savings / average delay) * 100
 
-        rows.push(Report1Row 
+        rows.push(Report1Row
         {
             region,
             main_island,
@@ -152,8 +152,8 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
     // Sort descending by efficiency
     rows.sort_by(|a, b| {
         b.efficiency_score  // sorts rows in descending order by efficiency_score
-        .partial_cmp(&a.efficiency_score)   // use partial_cmp for f64 comparison (f64 can have NaN values)
-        .unwrap_or(std::cmp::Ordering::Equal)
+            .partial_cmp(&a.efficiency_score)   // use partial_cmp for f64 comparison (f64 can have NaN values)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     // ---------- Print Table ----------
@@ -207,7 +207,7 @@ pub fn report_regional_efficiency(projects: &[Project]) -> Result<(), Box<dyn Er
         "EfficiencyScore",
     ])?;
 
-    for r in rows 
+    for r in rows
     {
         wtr.write_record(&[
             &r.region,
